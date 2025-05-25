@@ -712,7 +712,7 @@ st.markdown("## 📋 Kies een actie:")
 col1, col2 = st.columns(2)
 
 with col1:
-    st.page_link("pages/1_Add_User.py", label="👤 Gebruiker Toevoegen", icon="🧾")
+    st.page_link("pages/1_Gebruiker_Toevoegen.py", label="👤 Gebruiker Toevoegen", icon="🧾")
 
 with col2:
-    st.page_link("pages/2_Check_Car_Info.py", label="🔍 Kenteken Opzoeken", icon="🚘")
+    st.page_link("pages/2_Check_Auto_Info.py", label="🔍 Kenteken Opzoeken", icon="🚘")
