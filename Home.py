@@ -692,11 +692,22 @@
 # """, unsafe_allow_html=True)
 import streamlit as st
 
-st.set_page_config(page_title="APK Dashboard", page_icon="🚗")
+st.set_page_config(
+    page_title="Koree Autoservice",
+    page_icon="🚗",
+    layout="centered"
+)
 
-st.title("🚘 Welkom bij APK Assistent")
+st.markdown("""
+    <div style='text-align: center; padding: 2rem 0;'>
+        <h1 style='color: #1f4e79;'>🚗 Koree Autoservice</h1>
+        <p style='font-size: 18px;'>Welkom bij de APK Herinneringsservice</p>
+    </div>
+""", unsafe_allow_html=True)
 
-st.markdown("Kies een optie:")
+st.divider()
+
+st.markdown("## 📋 Kies een actie:")
 
 col1, col2 = st.columns(2)
 
@@ -704,4 +715,4 @@ with col1:
     st.page_link("pages/1_Add_User.py", label="👤 Gebruiker Toevoegen", icon="🧾")
 
 with col2:
-    st.page_link("pages/2_Check_Car_Info.py", label="🔍 Kenteken Opzoeken", icon="🚗")
+    st.page_link("pages/2_Check_Car_Info.py", label="🔍 Kenteken Opzoeken", icon="🚘")
