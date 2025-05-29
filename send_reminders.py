@@ -3,12 +3,24 @@ import os
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 
+print("📤 Start sending test email")
+
 # Environment variables for credentials
 EMAIL_ADDRESS = os.environ.get("EMAIL_USER")
 EMAIL_PASSWORD = os.environ.get("EMAIL_PASS")
 
+# Debug: print basic setup
+print(f"📧 EMAIL_USER: {EMAIL_ADDRESS}")
+print("🔒 EMAIL_PASS: FOUND" if EMAIL_PASSWORD else "❌ EMAIL_PASS: NOT FOUND")
+
+# Check credentials
+if not EMAIL_ADDRESS or not EMAIL_PASSWORD:
+    print("❌ ERROR: EMAIL_USER or EMAIL_PASS environment variable not set.")
+    exit(1)
+
 # Test recipients
 recipients = ["abdlkdrdci@gmail.com", "muslumertekin@hotmail.com"]
+print("📬 Sending test email to:", ", ".join(recipients))
 
 # Email content
 subject = "APK Herinnering – Maak een afspraak"
@@ -44,10 +56,12 @@ message.attach(MIMEText(html_body, "html"))
 # Send email
 try:
     with smtplib.SMTP("smtp.gmail.com", 587) as server:
+        print("🔌 Connecting to SMTP server...")
         server.starttls()
         server.login(EMAIL_ADDRESS, EMAIL_PASSWORD)
         server.sendmail(EMAIL_ADDRESS, recipients, message.as_string())
         print("✅ Test e-mail(s) succesvol verzonden.")
 except Exception as e:
     print(f"❌ Fout bij verzenden van e-mail: {e}")
+
 

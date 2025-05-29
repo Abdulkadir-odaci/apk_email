@@ -1,9 +1,11 @@
+# .github/workflows/send_reminder.yml
+
 name: Send APK Reminder Emails
 
 on:
   schedule:
-    - cron: '0 13 * * *'  # Every day at 15:00 CEST (13:00 UTC)
-  workflow_dispatch:      # Allow manual trigger
+    - cron: '10 13 * * *'  # 15:10 Amsterdam time (13:10 UTC)
+  workflow_dispatch:
 
 jobs:
   send-emails:
@@ -23,9 +25,8 @@ jobs:
         pip install -r requirements.txt
 
     - name: Run reminder script
-      run: |
-        python send_reminders.py
       env:
         EMAIL_USER: ${{ secrets.EMAIL_USER }}
         EMAIL_PASS: ${{ secrets.EMAIL_PASS }}
-
+      run: |
+        python send_reminder.py
