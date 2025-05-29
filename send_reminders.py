@@ -19,7 +19,7 @@ if not EMAIL_ADDRESS or not EMAIL_PASSWORD:
     exit(1)
 
 # Test recipients
-recipients = ["abdlkdrdci@gmail.com", "muslumertekin@hotmail.com", "abdulkadirodaci@gmail.com", "reyhanguvelii@gmail.com"]
+recipients = ["abdlkdrdci@gmail.com", "abdulkadirodaci@gmail.com", "reyhanguvelii@gmail.com"]
 print("📬 Sending test email to:", ", ".join(recipients))
 
 # Email content
