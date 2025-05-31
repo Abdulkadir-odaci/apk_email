@@ -6,4 +6,6 @@ SQLAlchemy>=2.0.0
 python-dotenv>=1.0.0
 vehicle>=0.10.0    # if you’re using the async RDW wrapper
 supabase==1.0.0
+supabase-py==1.0.3
+
 
