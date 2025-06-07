@@ -4,6 +4,24 @@ from supabase import create_client, Client
 from datetime import datetime
 import re
 import hashlib
+import requests
+from pages.Check_Auto_Info import format_date
+
+# RDW API functions
+def fetch_vehicle_data(plate):
+    """Fetch vehicle info from RDW API"""
+    try:
+        # Clean the plate - remove spaces and dashes, convert to uppercase
+        clean_plate = plate.replace(" ", "").replace("-", "").upper()
+        
+        url = f"https://opendata.rdw.nl/resource/m9d7-ebf2.json?kenteken={clean_plate}"
+        response = requests.get(url, timeout=10)
+        
+        if response.status_code == 200 and response.json():
+            return response.json()[0]
+    except Exception as e:
+        st.warning(f"Fout bij ophalen voertuiggegevens: {e}")
+    return None
 
 # Initialize Supabase client
 @st.cache_resource
@@ -61,26 +79,40 @@ class ClientDB:
         self.supabase = init_supabase()
     
     def add_client(self, name, email, licence_plate, user_id):
-        """Add a new client for specific user"""
+        """Add a new client for specific user with APK data"""
         try:
+            # Fetch vehicle data from RDW API
+            vehicle_data = fetch_vehicle_data(licence_plate)
+            apk_expiry = None
+            car_brand = None
+            car_model = None
+            
+            if vehicle_data:
+                apk_expiry = vehicle_data.get('vervaldatum_apk')
+                car_brand = vehicle_data.get('merk')
+                car_model = vehicle_data.get('handelsbenaming')
+            
             result = self.supabase.table('client').insert({
                 'name': name,
                 'email': email,
                 'licence_plate': licence_plate.upper(),
-                'user_id': user_id
+                'user_id': user_id,
+                'apk_expiry_date': apk_expiry,
+                'car_brand': car_brand,
+                'car_model': car_model
             }).execute()
-            return True, "Klant succesvol toegevoegd!"
+            return True, "Klant succesvol toegevoegd!", vehicle_data
         except Exception as e:
             error_msg = str(e)
             if "duplicate key" in error_msg.lower():
-                return False, "E-mail of kenteken bestaat al!"
-            return False, f"Fout bij toevoegen klant: {error_msg}"
+                return False, "E-mail of kenteken bestaat al!", None
+            return False, f"Fout bij toevoegen klant: {error_msg}", None
     
     def get_user_clients(self, user_id):
         """Get all clients for specific user only"""
         try:
             result = self.supabase.table('client').select(
-                'id, name, email, licence_plate, created_at'
+                'id, name, email, licence_plate, apk_expiry_date, car_brand, car_model, created_at'
             ).eq('user_id', user_id).order('created_at', desc=True).execute()
             return result.data
         except Exception as e:
@@ -91,7 +123,7 @@ class ClientDB:
         """Search clients by name, email, or licence plate for specific user only"""
         try:
             result = self.supabase.table('client').select(
-                'id, name, email, licence_plate, created_at'
+                'id, name, email, licence_plate, apk_expiry_date, car_brand, car_model, created_at'
             ).eq('user_id', user_id).or_(
                 f"name.ilike.%{search_term}%,"
                 f"email.ilike.%{search_term}%,"
@@ -341,7 +373,7 @@ def show_add_client(db, user_id):
             licence_plate = st.text_input(
                 "Kenteken *",
                 placeholder="AB-123-C",
-                help="Voertuig kenteken"
+                help="Voertuig kenteken (APK gegevens worden automatisch opgehaald)"
             )
             st.empty()
         
@@ -367,15 +399,39 @@ def show_add_client(db, user_id):
                 for error in errors:
                     st.error(error)
             else:
-                success, message = db.add_client(
-                    name.strip(),
-                    email.strip().lower(),
-                    licence_plate.strip(),
-                    user_id
-                )
+                with st.spinner("Klant toevoegen en voertuiggegevens ophalen..."):
+                    success, message, vehicle_data = db.add_client(
+                        name.strip(),
+                        email.strip().lower(),
+                        licence_plate.strip(),
+                        user_id
+                    )
                 
                 if success:
                     st.success(message)
+                    
+                    # Show vehicle information if available
+                    if vehicle_data:
+                        st.info("🚗 **Voertuiggegevens gevonden:**")
+                        col1, col2 = st.columns(2)
+                        
+                        with col1:
+                            if vehicle_data.get('merk'):
+                                st.write(f"**Merk:** {vehicle_data['merk']}")
+                            if vehicle_data.get('handelsbenaming'):
+                                st.write(f"**Model:** {vehicle_data['handelsbenaming']}")
+                            if vehicle_data.get('eerste_kleur'):
+                                st.write(f"**Kleur:** {vehicle_data['eerste_kleur']}")
+                        
+                        with col2:
+                            if vehicle_data.get('vervaldatum_apk'):
+                                apk_date = format_date(vehicle_data['vervaldatum_apk'])
+                                st.write(f"**APK vervalt:** {apk_date}")
+                            if vehicle_data.get('datum_eerste_toelating'):
+                                reg_date = format_date(vehicle_data['datum_eerste_toelating'])
+                                st.write(f"**Eerste toelating:** {reg_date}")
+                    else:
+                        st.warning("⚠️ Geen voertuiggegevens gevonden voor dit kenteken")
                 else:
                     st.error(message)
 
@@ -389,18 +445,65 @@ def show_all_clients(db, user_id):
         df = pd.DataFrame(clients)
         df['created_at'] = pd.to_datetime(df['created_at']).dt.strftime('%Y-%m-%d %H:%M')
         
+        # Format APK expiry date for display
+        if 'apk_expiry_date' in df.columns:
+            df['apk_expiry_formatted'] = df['apk_expiry_date'].apply(
+                lambda x: format_date(x) if x else "Niet beschikbaar"
+            )
+        
         df_display = df.rename(columns={
             'name': 'Naam',
             'email': 'E-mail',
             'licence_plate': 'Kenteken',
+            'car_brand': 'Merk',
+            'car_model': 'Model',
+            'apk_expiry_formatted': 'APK Vervalt',
             'created_at': 'Toegevoegd op'
         })
         
+        # Select columns to display
+        display_columns = ['Naam', 'E-mail', 'Kenteken', 'APK Vervalt', 'Toegevoegd op']
+        if 'Merk' in df_display.columns:
+            display_columns.insert(3, 'Merk')
+        if 'Model' in df_display.columns:
+            display_columns.insert(4, 'Model')
+        
         st.dataframe(
-            df_display[['Naam', 'E-mail', 'Kenteken', 'Toegevoegd op']],
+            df_display[display_columns],
             use_container_width=True,
             hide_index=True
         )
+        
+        # Check for expiring APK
+        if 'apk_expiry_date' in df.columns:
+            today = datetime.now().date()
+            expiring_soon = []
+            
+            for _, client in df.iterrows():
+                if client['apk_expiry_date']:
+                    try:
+                        apk_date = datetime.strptime(client['apk_expiry_date'][:10], '%Y-%m-%d').date()
+                        days_until_expiry = (apk_date - today).days
+                        
+                        if days_until_expiry <= 30 and days_until_expiry >= 0:
+                            expiring_soon.append({
+                                'name': client['name'],
+                                'plate': client['licence_plate'],
+                                'days': days_until_expiry,
+                                'date': format_date(client['apk_expiry_date'])
+                            })
+                    except:
+                        pass
+            
+            if expiring_soon:
+                st.warning("⚠️ **APK verloopt binnenkort:**")
+                for client in expiring_soon:
+                    if client['days'] == 0:
+                        st.error(f"🚨 {client['name']} ({client['plate']}) - APK verloopt VANDAAG!")
+                    elif client['days'] <= 7:
+                        st.error(f"🚨 {client['name']} ({client['plate']}) - APK verloopt over {client['days']} dagen ({client['date']})")
+                    else:
+                        st.warning(f"⚠️ {client['name']} ({client['plate']}) - APK verloopt over {client['days']} dagen ({client['date']})")
         
         # Statistics
         col1, col2, col3 = st.columns(3)
@@ -443,15 +546,31 @@ def show_search_clients(db, user_id):
             df = pd.DataFrame(clients)
             df['created_at'] = pd.to_datetime(df['created_at']).dt.strftime('%Y-%m-%d %H:%M')
             
+            # Format APK expiry date for display
+            if 'apk_expiry_date' in df.columns:
+                df['apk_expiry_formatted'] = df['apk_expiry_date'].apply(
+                    lambda x: format_date(x) if x else "Niet beschikbaar"
+                )
+            
             df_display = df.rename(columns={
                 'name': 'Naam',
                 'email': 'E-mail',
                 'licence_plate': 'Kenteken',
+                'car_brand': 'Merk',
+                'car_model': 'Model',
+                'apk_expiry_formatted': 'APK Vervalt',
                 'created_at': 'Toegevoegd op'
             })
             
+            # Select columns to display
+            display_columns = ['Naam', 'E-mail', 'Kenteken', 'APK Vervalt', 'Toegevoegd op']
+            if 'Merk' in df_display.columns:
+                display_columns.insert(3, 'Merk')
+            if 'Model' in df_display.columns:
+                display_columns.insert(4, 'Model')
+            
             st.dataframe(
-                df_display[['Naam', 'E-mail', 'Kenteken', 'Toegevoegd op']],
+                df_display[display_columns],
                 use_container_width=True,
                 hide_index=True
             )
@@ -481,9 +600,14 @@ def show_manage_clients(db, user_id):
         with col1:
             st.info(f"**Naam:** {selected_client['name']}")
             st.info(f"**E-mail:** {selected_client['email']}")
+            if selected_client.get('car_brand'):
+                st.info(f"**Merk:** {selected_client['car_brand']}")
         
         with col2:
             st.info(f"**Kenteken:** {selected_client['licence_plate']}")
+            if selected_client.get('apk_expiry_date'):
+                apk_date = format_date(selected_client['apk_expiry_date'])
+                st.info(f"**APK vervalt:** {apk_date}")
             st.info(f"**Toegevoegd:** {pd.to_datetime(selected_client['created_at']).strftime('%Y-%m-%d %H:%M')}")
         
         st.subheader("Acties")
@@ -550,7 +674,6 @@ def show_manage_clients(db, user_id):
 
 if __name__ == "__main__":
     main()
-
 
 
 
